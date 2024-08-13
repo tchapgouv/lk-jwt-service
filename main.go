@@ -23,6 +23,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"time"
 
@@ -35,7 +36,8 @@ import (
 
 type Handler struct {
 	key, secret, lk_url string
-	skipVerifyTLS bool
+	skipVerifyTLS       bool
+	hs_allowlist        []string
 }
 
 type OpenIDTokenType struct {
@@ -56,10 +58,18 @@ type SFUResponse struct {
 }
 
 func exchangeOIDCToken(
-	ctx context.Context, token OpenIDTokenType, skipVerifyTLS bool,
-) (*fclient.UserInfo, error) {
+	ctx context.Context, token OpenIDTokenType, skipVerifyTLS bool, hs_allowlist []string) (*fclient.UserInfo, error) {
 	if token.AccessToken == "" || token.MatrixServerName == "" {
 		return nil, errors.New("Missing parameters in OIDC token")
+	}
+
+	if len(hs_allowlist) > 0 {
+		for _, allowed_hs := range hs_allowlist {
+			if allowed_hs == token.MatrixServerName {
+				break
+			}
+		}
+		return nil, errors.New("Homeserver not allowed")
 	}
 
 	if skipVerifyTLS {
@@ -130,7 +140,7 @@ func (h *Handler) handle(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		userInfo, err := exchangeOIDCToken(r.Context(), body.OpenIDToken, h.skipVerifyTLS)
+		userInfo, err := exchangeOIDCToken(r.Context(), body.OpenIDToken, h.skipVerifyTLS, h.hs_allowlist)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			err = json.NewEncoder(w).Encode(gomatrix.RespError{
@@ -184,6 +194,8 @@ func main() {
 	secret := os.Getenv("LIVEKIT_SECRET")
 	lk_url := os.Getenv("LIVEKIT_URL")
 
+	hs_allowlist := strings.Split(os.Getenv("HS_ALLOWLIST"), ",")
+
 	// Check if the key, secret or url are empty.
 	if key == "" || secret == "" || lk_url == "" {
 		log.Fatal("LIVEKIT_KEY, LIVEKIT_SECRET and LIVEKIT_URL environment variables must be set")
@@ -197,10 +209,11 @@ func main() {
 	log.Printf("LIVEKIT_KEY: %s, LIVEKIT_SECRET: %s, LIVEKIT_URL: %s, LK_JWT_PORT: %s", key, secret, lk_url, lk_jwt_port)
 
 	handler := &Handler{
-		key:    key,
-		secret: secret,
-		lk_url: lk_url,
+		key:           key,
+		secret:        secret,
+		lk_url:        lk_url,
 		skipVerifyTLS: skipVerifyTLS,
+		hs_allowlist:  hs_allowlist,
 	}
 
 	http.HandleFunc("/sfu/get", handler.handle)

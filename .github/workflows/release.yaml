@@ -2,6 +2,7 @@ name: "Create draft release with binaries after tag"
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 permissions:
   contents: write  # to upload the binaries to the release
 jobs:
