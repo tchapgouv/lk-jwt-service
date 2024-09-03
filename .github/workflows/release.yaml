@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: "Fetch all binaries"
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4.1.7
       - name: "Create release"
         uses: softprops/action-gh-release@de2c0eb89ae2a093876385947365aca7b0e5f844 # v1
         with:
